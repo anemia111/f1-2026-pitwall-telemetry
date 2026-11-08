@@ -1,0 +1,11 @@
+[project]
+name = "apex-pitwall"
+version = "0.1.0"
+requires-python = ">=3.12"
+description = "Local race engineering and F1 2026 UDP telemetry"
+readme = "README.md"
+license = "MIT"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
