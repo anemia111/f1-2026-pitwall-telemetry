@@ -20,6 +20,8 @@ def verify(url: str, channel: str | None, screenshot: Path | None) -> None:
         expect(page.locator("#markers circle")).to_have_count(24)
         expect(page.get_by_role("heading", name="ピットウォール", exact=True)).to_be_visible()
         expect(page.get_by_role("link", name="PIT WALL")).to_have_attribute("aria-current", "page")
+        page.get_by_role("button", name="GAP", exact=True).click()
+        expect(page.get_by_role("columnheader", name="GAP", exact=True)).to_be_visible()
         expect(page.locator("#replay-controls")).to_be_hidden()
         assert " L" not in page.locator("#current-trace").get_attribute("d")
         assert page.locator("#previous-trace").get_attribute("d") == ""
@@ -54,6 +56,13 @@ def verify(url: str, channel: str | None, screenshot: Path | None) -> None:
         page.get_by_role("link", name="PS5 LIVE", exact=True).click()
         expect(page.get_by_role("link", name="このPCのライブ画面を開く")).to_have_attribute("href", "http://127.0.0.1:8000/")
         expect(page.locator("#pit-wall-grid")).to_be_hidden()
+        page.get_by_role("link", name="REPLAY", exact=True).click()
+        seek(72)
+        page.get_by_role("link", name="LAP RECORDS", exact=True).click()
+        expect(page.locator("#timing-laps tr")).to_have_count(2)
+        page.get_by_label("周回", exact=True).select_option("1")
+        expect(page.locator("#timing-minis .mini-record-row")).to_have_count(30)
+        expect(page.locator("#timing-laps tr.selected")).to_contain_text("30/30")
         page.get_by_role("link", name="REPLAY", exact=True).click()
         if screenshot:
             seek(72)

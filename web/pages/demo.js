@@ -28,6 +28,10 @@ let eventCount = -1;
 let selected = 1;
 let index = 0;
 let timer = null;
+let gapMode = false;
+let recordsByCar;
+const teamColors = ['#00d2be', '#ed202b', '#4781d9', '#59b9ed', '#1ea483', '#2685ad', '#647ff5', '#c1c7cc', '#ff880d', '#babfc5', '#c8a460'];
+const seconds = ms => number(ms == null ? null : ms / 1000, 3);
 
 function initMap(traces) {
   const points = traces.flat();
@@ -67,6 +71,7 @@ const workspaces = {
   circuit: ['CIRCUIT', 'サーキット'],
   strategy: ['STRATEGY', 'レース戦略'],
   replay: ['REPLAY', 'セッションリプレイ'],
+  timing: ['LAP RECORDS', '周回記録'],
   live: ['PS5 LIVE', 'PS5 ライブ接続'],
 };
 function showWorkspace() {
@@ -88,19 +93,23 @@ function showWorkspace() {
   if (current === 'strategy') focus.append(strategy);
   const single = current === 'circuit' || current === 'strategy';
   const live = current === 'live';
+  const timing = current === 'timing';
   focus.hidden = !single;
-  find('pit-wall-grid').hidden = single || live;
+  find('pit-wall-grid').hidden = single || live || timing;
+  find('timing-panel').hidden = !timing;
   find('replay-controls').hidden = current !== 'replay';
   find('live-panel').hidden = !live;
   find('race-metrics').hidden = live;
   view.driver.parentElement.hidden = live;
   view.play.hidden = live;
+  if (timing && recordsByCar) drawTiming(race.frames[index].cars.find(c => c.id === selected));
 }
 window.addEventListener('hashchange', showWorkspace);
 showWorkspace();
 
 function selectDriver(id) {
   selected = id;
+  find('timing-lap').value = '';
   view.driver.value = id;
   draw();
 }
@@ -108,11 +117,15 @@ view.driver.addEventListener('change', () => selectDriver(Number(view.driver.val
 
 function makeRow(car) {
   const row = document.createElement('tr');
-  const fields = Array.from({ length: 15 }, () => row.insertCell());
-  fields[0].className = 'position';
+  const fields = Array.from({ length: 13 }, () => row.insertCell());
+  fields[0].className = 'leader-pos';
+  const badge = document.createElement('b');
+  badge.style.backgroundColor = teamColors[car.teamId - 476] ?? '#64778b';
+  fields[0].append(badge);
   const button = document.createElement('button');
   button.className = 'driver';
-  button.textContent = car.name;
+  button.textContent = 'D' + String(car.id).padStart(2, '0');
+  button.setAttribute('aria-label', car.name);
   button.addEventListener('click', () => selectDriver(car.id));
   fields[1].append(button);
   view.cars.append(row);
@@ -124,8 +137,71 @@ function makeRow(car) {
   title.textContent = car.name;
   dot.append(title);
   view.markers.append(dot);
-  cells.set(car.id, { row, fields, button });
+  const sectors = fields.slice(6, 9).map(cell => {
+    cell.className = 'leader-sector';
+    const time = document.createElement('span');
+    const rail = document.createElement('div');
+    rail.className = 'mini-rail';
+    rail.setAttribute('role', 'img');
+    rail.append(...Array.from({ length: 10 }, () => document.createElement('span')));
+    cell.append(time, rail);
+    return { time, rail };
+  });
+  cells.set(car.id, { row, fields, button, badge, sectors });
   markers.set(car.id, dot);
+}
+
+function drawTiming(car) {
+  const known = (recordsByCar.get(car.id) ?? []).filter(record => record.lap <= car.lap);
+  const picker = find('timing-lap');
+  const previous = picker.value;
+  const available = known.map(record => String(record.lap)).join(',');
+  if (picker.dataset.available !== available) {
+    picker.replaceChildren(new Option('現在の周回', ''), ...known.map(record => new Option('L' + record.lap, record.lap)));
+    picker.value = known.some(record => String(record.lap) === previous) ? previous : '';
+    picker.dataset.available = available;
+  }
+  const chosen = known.find(record => record.lap === Number(picker.value)) ?? known.at(-1);
+  function visibleMini(record, mini) {
+    return record.lap < car.lap || (mini.toM <= car.distance && mini.number < 30);
+  }
+  find('timing-laps').replaceChildren(...known.map(record => {
+    const row = document.createElement('tr');
+    row.classList.toggle('selected', record === chosen);
+    const complete = record.lap < car.lap;
+    const sectors = complete ? record.sectors.map(s => s.ms) : [car.sector1, car.sector2, null];
+    const count = record.minis.filter(mini => visibleMini(record, mini) && mini.ms != null).length;
+    ['L' + record.lap, lapTime(complete ? record.ms : car.elapsed), ...sectors.map(seconds), count + '/' + record.minis.length]
+      .forEach(value => { row.insertCell().textContent = value; });
+    return row;
+  }));
+  find('timing-minis').replaceChildren(...[1, 2, 3].map(sector => {
+    const column = document.createElement('div');
+    column.className = 'mini-record';
+    const heading = document.createElement('h3');
+    heading.textContent = 'SECTOR ' + sector;
+    column.append(heading);
+    for (const mini of chosen?.minis.filter(item => item.sector === sector) ?? []) {
+      const row = document.createElement('div');
+      row.className = 'mini-record-row';
+      const time = visibleMini(chosen, mini) ? seconds(mini.ms) : '—';
+      row.append(...['M' + String(mini.number).padStart(2, '0'), number(mini.fromM) + '–' + number(mini.toM) + ' m', time]
+        .map(value => { const cell = document.createElement('span'); cell.textContent = value; return cell; }));
+      column.append(row);
+    }
+    return column;
+  }));
+}
+
+find('timing-lap').addEventListener('change', draw);
+for (const [id, leaderGap] of [['interval-mode', false], ['gap-mode', true]]) {
+  find(id).addEventListener('click', () => {
+    gapMode = leaderGap;
+    find('interval-mode').setAttribute('aria-pressed', String(!gapMode));
+    find('gap-mode').setAttribute('aria-pressed', String(gapMode));
+    find('gap-header').textContent = gapMode ? 'GAP' : 'INT';
+    if (race) draw();
+  });
 }
 
 function drawEvents() {
@@ -162,19 +238,26 @@ function draw() {
   view.pedals.textContent = `THR ${number(car.throttle)}% · BRK ${number(car.brake)}%`;
   drawTrace(frame.sample);
   drawEvents();
+  if (location.hash === '#timing') drawTiming(car);
   for (const c of frame.cars) {
-    const { row, fields, button } = cells.get(c.id);
+    const { row, fields, button, badge, sectors } = cells.get(c.id);
     const chosen = c.id === selected;
     row.classList.toggle('selected', chosen);
     button.setAttribute('aria-pressed', String(chosen));
-    const status = c.status === 3 ? 'FIN' : c.status === 4 || c.status === 7 ? 'DNF' : c.pit ? 'PIT'
-      : c.penalties ? `+${c.penalties}s PEN` : c.status === 2 ? 'TRACK' : 'N/A';
-    const items = [number(c.position), null, c.tyre ?? 'N/A', number(c.age), number(c.lap),
-      lapTime(c.best), lapTime(c.last), number(c.sector1 == null ? null : c.sector1 / 1000, 3),
-      number(c.sector2 == null ? null : c.sector2 / 1000, 3), gap(c.gap), gap(c.behind),
-      c.position === 1 ? 'LEAD' : gap(c.leader), status, c.aero === 1 ? 'STR' : c.aero === 0 ? 'COR' : 'N/A',
-      c.overtake ? 'ON' : c.overtakeAvailable ? 'RDY' : 'OFF'];
+    badge.textContent = number(c.position);
+    const items = [null, null, `${c.tyre ?? '—'} · ${number(c.age)}L`, c.position === 1 ? 'LEAD' : gap(gapMode ? c.leader : c.gap),
+      lapTime(c.last), lapTime(c.best), null, null, null, number(c.stops), c.used == null ? '—' : number(c.used) + '%',
+      number(c.speed), number(c.energy == null ? null : c.energy / 1e6, 2)];
     items.forEach((text, i) => { if (text !== null) fields[i].textContent = text; });
+    const previous = recordsByCar.get(c.id)?.find(record => record.lap === c.lap - 1);
+    [c.sector1, c.sector2, previous?.sectors[2].ms].forEach((ms, i) => {
+      const { time, rail } = sectors[i];
+      const [start, end] = race.sectorBounds.slice(i, i + 2);
+      const done = Math.min(10, Math.max(0, Math.floor(10 * (c.distance - start) / (end - start))));
+      time.textContent = seconds(ms);
+      rail.setAttribute('aria-label', `S${i + 1} ミニセクター ${done}/10 通過`);
+      Array.from(rail.children).forEach((child, j) => child.classList.toggle('passed', j < done));
+    });
     const [x, y] = projected[c.id - 1][frame.sample];
     const dot = markers.get(c.id);
     dot.setAttribute('cx', x);
@@ -224,10 +307,19 @@ view.sc.addEventListener('click', () => {
 });
 
 try {
-  const response = await fetch('./race.json?v=2');
-  if (!response.ok) throw new Error('HTTP ' + response.status);
-  race = await response.json();
-  if (race.version !== 2 || !race.frames.length || race.traces.length !== 24) throw new Error('invalid demo file');
+  const [data, timing] = await Promise.all(['race.json', 'timing.json'].map(async path => {
+    const response = await fetch(`./${path}?v=4`);
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    return response.json();
+  }));
+  race = data;
+  if (race.version !== 4 || !race.frames.length || race.traces.length !== 24) throw new Error('invalid demo file');
+  recordsByCar = new Map();
+  for (const record of timing.laps) {
+    const id = record.car + 1;
+    if (!recordsByCar.has(id)) recordsByCar.set(id, []);
+    recordsByCar.get(id).push(record);
+  }
   projected = initMap(race.traces);
   events = race.frames.flatMap((frame, index) => {
     if (index === 0) return [{ index, time: frame.t, title: 'セッション開始' }];

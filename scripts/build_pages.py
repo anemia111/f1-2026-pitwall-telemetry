@@ -1,20 +1,24 @@
 """Build a static Pages demo from synthetic 2026 UDP, without reading any archives."""
 import argparse
 import json
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 from shutil import copyfile
 
 from pitwall.demo import TRACK, demo_packets
 from pitwall.protocol_2026 import parse
 from pitwall.state import LiveState
+from pitwall.storage import DDL, INSERT
 from pitwall.strategy import Assumptions, forecast
+from pitwall.timing import read_timing
 
 ROOT = Path(__file__).resolve().parent.parent
 FPS = 4
 SECONDS = 92
 
 
-def generate() -> dict:
+def generate(db: sqlite3.Connection) -> dict:
     state = LiveState(source="DEMO")
     frames = []
     traces: list[list[list[float | int]]] = [[] for _ in range(24)]
@@ -26,6 +30,8 @@ def generate() -> dict:
             if state.uid is None:
                 state.reset(p, t)
             state.ingest(p, t)
+            if p.header.kind == 1:
+                db.execute(INSERT["raw"], ("demo", t, 0, p.header.kind, -1, p.header.overall, raw))
         motion, laps = state.get(0, t), state.get(2, t)
         if not motion or not laps:
             raise RuntimeError(f"demo frame {frame} is missing Motion or Lap Data")
@@ -54,6 +60,10 @@ def generate() -> dict:
                 "brake": round(telem.get("brake", 0) * 100), "throttle": round(telem.get("throttle", 0) * 100),
                 "aero": aero.get("activeAeroMode"), "overtake": aero.get("overtakeActive"),
                 "overtakeAvailable": aero.get("overtakeAvailable"),
+                "distance": lap.get("lapDistance"), "elapsed": lap.get("currentLapTimeInMS"),
+                "stops": lap.get("numPitStops"), "teamId": (c["participant"] or {}).get("teamId"),
+                "used": max((c["damage"] or {}).get("tyresWear") or [], default=None),
+                "energy": (c["status"] or {}).get("ersStoreEnergy"),
             })
         frames.append({"t": t, "sample": frame, "lap": cars[0]["lap"], "total": session.get("totalLaps"),
                        "temperature": session.get("trackTemperature"),
@@ -62,7 +72,16 @@ def generate() -> dict:
                                     "plans": [{"id": p["id"], "lap": p["pitLap"], "time": p["remainingTime"],
                                                "interval": p["interval"], "loss": p.get("pitLoss")} for p in model["plans"]],
                                     "wear": model["model"]["wear"], "remaining": model["model"]["remaining"]}})
-    return {"version": 2, "fps": FPS, "trackLength": TRACK, "traces": traces, "frames": frames}
+    # Replay frames preserve the strategy model's sampling cadence. Record finer
+    # synthetic LapData separately so distance crossings can be interpolated.
+    timing_rate = 24
+    for frame in range(SECONDS * timing_rate):
+        t = frame / timing_rate
+        raw = next(raw for raw in demo_packets(frame, t * 8, 1, timing_rate) if parse(raw).header.kind == 2)
+        db.execute(INSERT["raw"], ("demo", t, 0, 2, -1, frame, raw))
+    return {"version": 4, "fps": FPS, "trackLength": TRACK, "traces": traces, "frames": frames,
+            "sectorBounds": [0, session["sector2LapDistanceStart"], session["sector3LapDistanceStart"], TRACK],
+            "timing": read_timing(db, "demo", None)}
 
 
 def main() -> None:
@@ -77,7 +96,12 @@ def main() -> None:
     copyfile(ROOT / "LICENSE", target / "LICENSE")
     (target / "README.md").write_text("# APEX 2026 Pit Wall Demo\n\nStatic GitHub Pages demo. All race data is synthetic.\n", encoding="utf8")
     (target / ".nojekyll").touch()
-    (target / "race.json").write_text(json.dumps(generate(), separators=(",", ":"), allow_nan=False), encoding="utf8")
+    with closing(sqlite3.connect(":memory:")) as db:
+        db.executescript(DDL)
+        race = generate(db)
+    timing = race.pop("timing")
+    for name, data in (("race.json", race), ("timing.json", timing)):
+        (target / name).write_text(json.dumps(data, separators=(",", ":"), allow_nan=False), encoding="utf8")
 
 
 if __name__ == "__main__":

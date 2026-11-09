@@ -74,6 +74,11 @@ def verify(args):
         expect(page.get_by_role("img", name="受信した走行位置と走行軌跡")).to_be_visible()
         if args.screenshot:
             page.screenshot(path=args.screenshot)
+        with page.expect_response(lambda r: "/api/timing?" in r.url and r.ok):
+            page.get_by_role("link", name="LAP RECORDS", exact=True).click()
+        expect(page.get_by_text("自動更新中", exact=True)).to_be_visible()
+        with page.expect_response(lambda r: "/api/timing?" in r.url and r.ok, timeout=5000):
+            expect(page.get_by_text("· 走行中", exact=False)).to_be_visible()
         page.get_by_role("link", name="DRIVER", exact=True).click()
         expect(page.get_by_role("heading", name="ドライバーテレメトリー")).to_be_visible()
         expect(page.get_by_role("img", name="速度 / km/h")).to_be_visible()

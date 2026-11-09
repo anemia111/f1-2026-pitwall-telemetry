@@ -104,13 +104,16 @@ export function LapRecords({ snap, selected }: { snap: Snapshot; selected: numbe
   const [revision, refresh] = useState(0);
   const run = archive ?? snap.run ?? runs?.[0]?.id;
   const car = driver ?? (selected < 24 ? selected : 0);
-  const [report, error] = useQuery<TimingReport>(run ? `/api/timing?run=${run}&car=${car}&revision=${revision}` : null);
+  const live = !!run && run === snap.run && !snap.replay && snap.online && !snap.ended && snap.connection?.recording === true;
+  const [report, error] = useQuery<TimingReport>(run ? `/api/timing?run=${run}&car=${car}&revision=${revision}` : null, live ? 1000 : 0);
   const laps = report?.laps ?? [];
-  const lap = laps.find(l => lapKey(l) === lapId) ?? [...laps].reverse().find(l => l.ms != null) ?? laps.at(-1);
+  const current = live ? snap.cars.find(c => c.id === car)?.lap : null;
+  const isCurrent = (row: TimingLap) => !!current && row.epoch === snap.epoch && row.lap === current.currentLapNum;
+  const lap = laps.find(l => lapKey(l) === lapId) ?? laps.find(isCurrent) ?? [...laps].reverse().find(l => l.ms != null) ?? laps.at(-1);
   const nameFor = (i: number) => run === snap.run ? snap.cars.find(c => c.id === i)?.name : null;
   return <>
     <section className="panel padded">
-      <div className="eyebrow">RECORDED TIMING / UDP 2026</div><h2>周回・セクター記録</h2>
+      <div className="eyebrow">{live ? 'LIVE TIMING' : 'RECORDED TIMING'} / UDP 2026</div><h2>周回・セクター記録</h2>
       <div className="bar">
         <label className="field compact">セッション<select value={run ?? ''} onChange={e => { setArchive(e.target.value); setLapId(null); }}>
           {!run && <option value="">記録なし</option>}
@@ -120,7 +123,7 @@ export function LapRecords({ snap, selected }: { snap: Snapshot; selected: numbe
         <label className="field compact">車両<select value={car} onChange={e => { setDriver(Number(e.target.value)); setLapId(null); }}>
           {Array.from({ length: 24 }, (_, i) => <option value={i} key={i}>CAR {i + 1}{nameFor(i) ? ' · ' + nameFor(i) : ''}</option>)}
         </select></label>
-        <button disabled={!run} onClick={() => refresh(v => v + 1)}>最新の記録を読み込む</button>
+        {live ? <span className="tag live">自動更新中</span> : <button disabled={!run} onClick={() => refresh(v => v + 1)}>最新の記録を読み込む</button>}
         {run && <a className="button" download href={`/api/timing/export?run=${run}`}>全車両の記録 JSON</a>}
       </div>
       <p className="muted timing-note">S1〜S3はゲームのタイムを優先。各セクターを距離で10分割し、通過時刻の差から計算します。</p>
@@ -134,7 +137,7 @@ export function LapRecords({ snap, selected }: { snap: Snapshot; selected: numbe
         {['LAP', 'TIME', 'S1', 'S2', 'S3', 'MINIS', 'VALID', 'EPOCH'].map(x => <th scope="col" key={x}>{x}</th>)}
       </tr></thead><tbody>{laps.map(row => <tr key={lapKey(row)} className={lap === row ? 'selected' : undefined}>
         <td><button aria-pressed={lap === row} onClick={() => setLapId(lapKey(row))}>L{row.lap}</button></td>
-        <td>{lapTime(row.ms)}</td>{row.sectors.map((s, i) => <td key={i} title={s.source === 'difference' ? 'ラップタイムからS1・S2を差し引いた値' : undefined}>
+        <td>{isCurrent(row) && row.ms == null ? <span className="accent">{lapTime(current?.currentLapTimeInMS)} · 走行中</span> : lapTime(row.ms)}</td>{row.sectors.map((s, i) => <td key={i} title={s.source === 'difference' ? 'ラップタイムからS1・S2を差し引いた値' : undefined}>
           {seconds(s.ms)}{s.source === 'difference' ? '*' : ''}{s.valid === false && s.ms != null ? ' · 無効' : ''}</td>)}
         <td>{row.minis.length ? `${row.minis.filter(m => m.ms != null).length}/${row.minis.length}` : 'N/A'}</td>
         <td>{row.valid === true ? '有効' : row.valid === false ? '無効' : '未確認'}</td><td>{row.epoch}</td>
