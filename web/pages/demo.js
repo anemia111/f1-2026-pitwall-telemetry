@@ -80,10 +80,7 @@ function showWorkspace() {
   const [english, japanese] = workspaces[current];
   find('workspace-label').textContent = 'RACE OPERATIONS / ' + english;
   find('workspace-title').textContent = japanese;
-  document.querySelectorAll('nav a').forEach(link => {
-    if (link.hash === '#' + current) link.setAttribute('aria-current', 'page');
-    else link.removeAttribute('aria-current');
-  });
+  find('workspace-select').value = current;
   const aside = find('pit-wall-aside');
   const map = find('circuit-panel');
   const strategy = find('strategy-panel');
@@ -105,6 +102,7 @@ function showWorkspace() {
   if (timing && recordsByCar) drawTiming(race.frames[index].cars.find(c => c.id === selected));
 }
 window.addEventListener('hashchange', showWorkspace);
+find('workspace-select').addEventListener('change', event => { location.hash = event.currentTarget.value; });
 showWorkspace();
 
 function selectDriver(id) {
