@@ -51,6 +51,10 @@ def verify(url: str, channel: str | None, screenshot: Path | None) -> None:
         seek(0)
         assert " L" not in page.locator("#current-trace").get_attribute("d")
         assert page.locator("#previous-trace").get_attribute("d") == ""
+        page.get_by_role("link", name="PS5 LIVE", exact=True).click()
+        expect(page.get_by_role("link", name="このPCのライブ画面を開く")).to_have_attribute("href", "http://127.0.0.1:8000/")
+        expect(page.locator("#pit-wall-grid")).to_be_hidden()
+        page.get_by_role("link", name="REPLAY", exact=True).click()
         if screenshot:
             seek(72)
             page.get_by_role("link", name="PIT WALL").click()

@@ -71,3 +71,25 @@ def test_access_key_for_http_and_ws(tmp_path):
         assert client.post("/api/record?enabled=false", headers={"Origin": "https://example.invalid"}).status_code == 401
         with client.websocket_connect("/ws", headers={"Origin": "http://testserver"}) as ws:
             assert ws.receive_json() is not None
+
+
+def test_live_trace_uses_motion_and_lap_without_telemetry(tmp_path):
+    from pitwall.protocol_2026 import parse
+
+    settings = Settings(udp_host="127.0.0.1", udp_port=0)
+    with TestClient(create_app(settings, tmp_path / "live.sqlite3")) as client, socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        destination = ("127.0.0.1", settings.udp_port)
+        for frame in range(4):
+            for raw in demo_packets(frame, 30.0 + frame, 143, 30):
+                if parse(raw).header.kind in (0, 2):
+                    sock.sendto(raw, destination)
+            sleep(.12)
+        state = wait_for(lambda: (s if (s := client.get("/api/state").json()).get("online") else None))
+        assert state["source"] == "LIVE"
+        assert len(state["cars"]) == 24
+        player = client.get("/api/trace?car=0&uid=143&epoch=0").json()
+        rival = client.get("/api/trace?car=3&uid=143&epoch=0").json()
+        assert len(player) >= 2 and len(rival) >= 2
+        assert player[-1][2:] != rival[-1][2:]
+        assert client.get("/api/trace?car=0&uid=142&epoch=0").json() == []
+        assert client.get("/api/trace?car=0&uid=143&epoch=1").json() == []

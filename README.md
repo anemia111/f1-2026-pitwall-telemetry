@@ -2,7 +2,7 @@
 
 PS5版 EA SPORTS F1 25「2026 Season Pack」の UDP を Windows PC で受信し、ブラウザから分析・記録・再生するローカルアプリです。最大24台のタイミング、テレメトリー、条件付きの戦略比較、日本語のチーム無線を1つの画面から操作できます。
 
-セットアップ前に、24台の合成レースを [GitHub Pagesの公開デモ](https://anemia111.github.io/f1-2026-pitwall-telemetry-pages/) で再生できます。PIT WALLで順位と選択車の走行軌跡を確認し、REPLAYで再生位置を変えられます。実機のUDP受信・保存・日本語の質問応答にはWindows版を使用します。
+セットアップ前に、24台の合成レースを [GitHub Pagesの公開デモ](https://anemia111.github.io/f1-2026-pitwall-telemetry-pages/) で再生できます。PIT WALLで順位と選択車の走行軌跡を確認し、REPLAYで再生位置を変えられます。公開ページの **PS5 LIVE** から、受信PCで起動したWindows版を開けます。
 
 ## Windows で起動
 
@@ -12,6 +12,8 @@ PS5版 EA SPORTS F1 25「2026 Season Pack」の UDP を Windows PC で受信し�
 4. デモのヘッダーに **DEMO / 模擬データ**、順位表に24台が表示されます。ゲーム内時間は8倍速で、約35秒で有効ラップ3周分が揃います。セッション終了後は **REPLAY** で記録を開けます。
 
 実機入力はデモを終了してから `Start-Live.cmd` を実行します。保存先の初期値は `data/pitwall.sqlite3` です。記録の開始・停止は **REPLAY** から操作できます。
+
+ライブ中は、選択した車両の現在ラップを水色で描画します。軌跡は同じフレームの Motion と Lap Data から作り、記録停止中も受信に合わせて更新します。
 
 PowerShell から起動する場合
 

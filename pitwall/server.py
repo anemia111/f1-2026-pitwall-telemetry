@@ -160,6 +160,13 @@ def create_app(settings: Settings, path: Path, web: Path = DEFAULT_WEB, *, demo_
         return {"addresses": addresses(), "httpPort": request.url.port or 80, "udpPort": settings.udp_port,
                 "lan": bool(settings.key), "source": r.settings.mode, "ollama": bool(settings.ollama)}
 
+    @app.get("/api/trace")
+    async def trace(car: Car, uid: Annotated[str, Query(pattern=r"^[0-9]{1,20}$")], epoch: Epoch):
+        state = engine().state
+        if uid != str(state.uid) or epoch != state.epoch:
+            return []
+        return list(state.traces.get(car, ()))
+
     @app.get("/api/qr")
     def qr(host: str, port: Annotated[int, Query(ge=1, le=65535)] = 8000):
         if not settings.key or host not in addresses():

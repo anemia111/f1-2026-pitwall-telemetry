@@ -9,6 +9,8 @@
 #focus-panel .map svg { max-height: min(65vh, 680px); }
 #focus-panel #strategy-panel { max-width: 850px; }
 #selected-car:empty { display: none; }
+.live-action { margin-block: 12px; }
+#live-panel { max-width: 850px; }
 @media (max-width: 1100px) {
   #pit-wall-grid { grid-template-columns: minmax(0, 1fr); }
   .wall aside { grid-template-columns: repeat(3, minmax(0, 1fr)); }

@@ -45,10 +45,13 @@ class LiveState:
     frames: OrderedDict[int, dict[int, Packet]] = field(default_factory=OrderedDict)
     sample_at: float = -1e9
     sampled_frame: int = -1
+    trace_at: float = -1e9
+    traced_frame: int = -1
     last_frame: int = -1
     observed_laps: dict[int, dict[int, dict]] = field(default_factory=dict)
     previous_laps: dict[int, dict] = field(default_factory=dict)
     track: dict[int, tuple[float, float]] = field(default_factory=dict)
+    traces: dict[int, deque[tuple[float, int, float, float]]] = field(default_factory=dict)
     counts: dict = field(default_factory=lambda: {"valid": 0, "invalid": 0, "ignored": 0, "late": 0, "frameGaps": 0})
     ended: bool = False
     red: bool = False
@@ -68,6 +71,9 @@ class LiveState:
         self.observed_laps.clear()
         self.previous_laps.clear()
         self.track.clear()
+        self.traces.clear()
+        self.trace_at = -1e9
+        self.traced_frame = -1
         self.sample_at = -1e9
         self.sampled_frame = -1
         self.ended = self.red = False
@@ -123,6 +129,8 @@ class LiveState:
         frame[h.kind] = packet
         if len(self.frames) > 16:
             self.frames.popitem(last=False)
+        if h.overall > self.traced_frame and now - self.trace_at >= .095 and {0, 2} <= frame.keys():
+            self.trace_motion(frame[0], frame[2], now)
         if now - self.sample_at < .095:
             return None, []
         if not (h.overall > self.sampled_frame and {0, 2, 6} <= frame.keys()):
@@ -218,6 +226,23 @@ class LiveState:
             if c["lap"]:
                 c["lap"]["rearGap"] = by_position.get(c["lap"]["carPosition"] + 1, {}).get("frontGap")
         return cars
+
+    def trace_motion(self, motion: Packet, lap: Packet, now: float) -> None:
+        self.trace_at = now
+        self.traced_frame = motion.header.overall
+        elapsed = round(now - self.started, 3)
+        for car in range(MAX_CARS):
+            row = lap.row("lapData", car, ("resultStatus", "currentLapNum"))
+            if row["resultStatus"] != 2 or not row["currentLapNum"]:
+                continue
+            point = motion.row("carMotionData", car, ("worldPositionX", "worldPositionZ"))
+            x, z = point["worldPositionX"], point["worldPositionZ"]
+            if x is None or z is None or (x == 0 and z == 0):
+                continue
+            trace = self.traces.get(car)
+            if trace is None:
+                trace = self.traces[car] = deque(maxlen=3600)
+            trace.append((elapsed, row["currentLapNum"], round(x, 2), round(z, 2)))
 
     def sample(self, lap: Packet, telemetry: Packet, now: float, motion: Packet | None) -> list[tuple[int, int, dict]]:
         p = self.get(4, now)

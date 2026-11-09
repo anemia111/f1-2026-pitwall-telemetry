@@ -71,18 +71,34 @@ export function EventList({ events, jump }: { events: Snapshot['events']; jump?:
 }
 
 type Marker = { d: number; text: string; color: string };
+type TracePoint = [seconds: number, lap: number, x: number, z: number];
 
 export function MapView({ snap, selected, large = false, markers = [] }: {
   snap: Snapshot; selected: number; large?: boolean; markers?: Marker[];
 }) {
   const track = snap.track;
+  const [liveTrace] = useQuery<TracePoint[]>(!snap.replay && snap.uid && selected < 24
+    ? `/api/trace?car=${selected}&uid=${snap.uid}&epoch=${snap.epoch}` : null, 300);
+  const trace = liveTrace ?? [];
   const coords = snap.cars.filter(c => c.motion?.worldPositionX != null && c.motion.worldPositionZ != null &&
     (c.motion.worldPositionX !== 0 || c.motion.worldPositionZ !== 0));
-  const extents = [...track.map(p => [p[1], p[2]]), ...coords.map(c => [c.motion!.worldPositionX!, c.motion!.worldPositionZ!])];
+  const extents = [...track.map(p => [p[1], p[2]]), ...trace.map(p => [p[2], p[3]]),
+    ...coords.map(c => [c.motion!.worldPositionX!, c.motion!.worldPositionZ!])];
   const minX = Math.min(...extents.map(p => p[0])), minZ = Math.min(...extents.map(p => p[1]));
   const maxX = Math.max(...extents.map(p => p[0])), maxZ = Math.max(...extents.map(p => p[1]));
   const scale = Math.min(600 / Math.max(1, maxX - minX), 315 / Math.max(1, maxZ - minZ));
   const screen = (x: number, z: number) => [340 + (x - (minX + maxX) / 2) * scale, 185 - (z - (minZ + maxZ) / 2) * scale];
+  const traceLap = trace.at(-1)?.[1];
+  let last: TracePoint | undefined;
+  const [pastPath, currentPath]: [string[], string[]] = [[], []];
+  for (const point of trace) {
+    const [time, lap, x, z] = point;
+    const contiguous = last && time - last[0] <= 1.2 && lap === last[1] &&
+      Math.hypot(x - last[2], z - last[3]) <= 180;
+    const path = lap === traceLap ? currentPath : pastPath;
+    path.push((contiguous ? 'L' : 'M') + screen(x, z).map(v => v.toFixed(1)).join(' '));
+    last = point;
+  }
   const trackPath = (predicate: (d: number) => boolean) => {
     let previous = -Infinity;
     return track.map(([d, x, z]) => {
@@ -101,11 +117,13 @@ export function MapView({ snap, selected, large = false, markers = [] }: {
   const boundaries = session ? [session.sector2LapDistanceStart, session.sector3LapDistanceStart] : [];
   return <section className={`panel map ${large ? 'large' : ''}`}>
     <div className="panel-head"><div><div className="eyebrow">WORLD POSITION · X / Z</div><h2>サーキットマップ</h2></div>
-      <span className="tag">{track.length ? `${track.length} TRACE` : 'TRACE 待ち'}</span></div>
+      <span className="tag">{traceLap ? `LAP ${traceLap} · ${trace.length} TRACE` : track.length ? `${track.length} TRACE` : 'TRACE 待ち'}</span></div>
     {extents.length ? <svg viewBox="0 0 680 370" role="img" aria-label="受信した走行位置と走行軌跡">
       <path d={trackPath(() => true)} fill="none" stroke="#4c5c70" strokeWidth="8" strokeLinecap="round" />
       <path d={zones(active ?? [])} fill="none" stroke="#59d7ec" strokeWidth="4" />
       <path d={zones(session?.drsZones ?? [])} fill="none" stroke="#ad9fff" strokeWidth="3" />
+      <path d={pastPath.join(' ')} fill="none" stroke="#6a7c90" strokeWidth="4" strokeLinecap="round" />
+      <path data-live-trace d={currentPath.join(' ')} fill="none" stroke="#62dded" strokeWidth="5" strokeLinecap="round" />
       {boundaries.map((d, i) => {
         const p = track.find(v => Math.abs(v[0] - d) <= 15);
         if (!p) return null;
@@ -129,7 +147,7 @@ export function MapView({ snap, selected, large = false, markers = [] }: {
         </g>;
       })}
     </svg> : <div className="map-empty"><span>◎</span><p>走行座標を受信すると描画します</p></div>}
-    <div className="readout"><span>走行軌跡</span><span className="accent">アクティブエアロ</span><span className="violet">DRS</span><span className="amber">セクター境界</span>
+    <div className="readout"><span>過去の走行</span>{!snap.replay && <span className="accent">選択車の現在ラップ</span>}<span>アクティブエアロ</span><span className="violet">DRS</span><span className="amber">セクター境界</span>
       {markers.length > 0 && <><span style={{ color: COLORS[2] }}>制動</span><span className="accent">アクセル再開</span><span className="amber">最低速</span><span className="violet">最高速</span></>}</div>
   </section>;
 }

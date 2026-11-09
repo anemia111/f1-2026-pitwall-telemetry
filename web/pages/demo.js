@@ -67,6 +67,7 @@ const workspaces = {
   circuit: ['CIRCUIT', 'サーキット'],
   strategy: ['STRATEGY', 'レース戦略'],
   replay: ['REPLAY', 'セッションリプレイ'],
+  live: ['PS5 LIVE', 'PS5 ライブ接続'],
 };
 function showWorkspace() {
   const key = location.hash.slice(1);
@@ -86,9 +87,14 @@ function showWorkspace() {
   if (current === 'circuit') focus.append(map);
   if (current === 'strategy') focus.append(strategy);
   const single = current === 'circuit' || current === 'strategy';
+  const live = current === 'live';
   focus.hidden = !single;
-  find('pit-wall-grid').hidden = single;
+  find('pit-wall-grid').hidden = single || live;
   find('replay-controls').hidden = current !== 'replay';
+  find('live-panel').hidden = !live;
+  find('race-metrics').hidden = live;
+  view.driver.parentElement.hidden = live;
+  view.play.hidden = live;
 }
 window.addEventListener('hashchange', showWorkspace);
 showWorkspace();
@@ -206,6 +212,9 @@ function play() {
     if (index === race.frames.length - 1) stop();
   }, 1000 / race.fps);
 }
+window.addEventListener('hashchange', () => {
+  if (location.hash === '#live') stop();
+});
 view.play.addEventListener('click', () => timer === null ? play() : stop());
 view.seek.addEventListener('input', () => { stop(); index = Number(view.seek.value); draw(); });
 view.sc.addEventListener('click', () => {
@@ -233,7 +242,7 @@ try {
   view.seek.disabled = false;
   view.sc.disabled = !race.frames.some(frame => frame.safety === 1);
   view.load.hidden = true;
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) draw();
+  if (location.hash === '#live' || matchMedia('(prefers-reduced-motion: reduce)').matches) draw();
   else play();
 } catch (error) {
   view.load.textContent = 'デモデータを読み込めませんでした。ページを再読み込みしてください。';
