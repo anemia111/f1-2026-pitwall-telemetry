@@ -13,9 +13,9 @@ def datagram(kind, **overrides):
     return packet
 
 
-@pytest.mark.parametrize("kind,size", enumerate(
+@pytest.mark.parametrize("kind,size", list(enumerate(
     [1325, 926, 1399, 45, 1470, 1233, 1448, 1445, 1134, 1062, 1133, 1460, 231, 273, 104, 1231, 269]
-))
+)))
 def test_all_packet_lengths(kind, size):
     raw = bytes(datagram(kind))
     assert len(raw) == size
