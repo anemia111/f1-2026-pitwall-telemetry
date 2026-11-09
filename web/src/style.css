@@ -151,3 +151,31 @@ footer { padding: 13px clamp(10px, 3vw, 36px); border-top: 1px solid var(--edge)
   .page-head { align-items: flex-start; }
   .driver b { max-width: 116px; }
 }
+.race-leaderboard { background: #0b151f; align-self: start; }
+.leader-head { display: flex; justify-content: space-between; align-items: center; padding: 7px 9px; border-bottom: 1px solid #213346; }
+.leader-head h2 { font-size: .82rem; font-weight: 800; letter-spacing: .035em; }
+.leader-head .controls { gap: 4px; }
+.leader-head button { font: 700 10px/1.2 Consolas, monospace; padding: 4px 9px; }
+.leader-head button[aria-pressed="true"] { color: #d9f3ff; border-color: #2388e9; background: #10283d; }
+.race-leaderboard table { min-width: 580px; font-size: .76rem; }
+.race-leaderboard th, .race-leaderboard td { padding: 3px 4px; height: 24px; }
+.race-leaderboard th { font-size: 9px; background: #0d1924; }
+.race-leaderboard td { border-bottom-color: #192b39; }
+.race-leaderboard tr:nth-child(even):not(.selected) { background: #0b151f; }
+.race-leaderboard tr.selected { background: #122b40; }
+.race-leaderboard .driver { width: 100%; }
+.leader-pos { width: 28px; }
+.leader-pos b { display: grid; place-items: center; width: 22px; height: 18px; border-radius: 2px; color: #080f16; font-weight: 800; }
+.leader-tyre { display: inline-flex; align-items: center; gap: 4px; }
+.leader-tyre .compound { width: 16px; height: 16px; min-width: 16px; font-size: 9px; }
+.leader-tyre small { color: var(--muted); }
+.leader-sector { min-width: 42px; text-align: center; font-size: 10px; }
+.mini-rail { display: grid; grid-template-columns: repeat(10, 1fr); gap: 1px; margin-top: 1px; height: 3px; }
+.mini-rail span { background: #344553; }
+.mini-rail .passed { background: #6ad4cb; }
+.leader-footer { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; padding: 6px 9px; color: var(--muted); font-size: .72rem; }
+.timing-note { margin-top: 10px; }
+.mini-records { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; padding: 12px; }
+.mini-record h3 { padding: 5px; color: var(--accent); }
+.mini-record-row { display: grid; grid-template-columns: 34px 1fr 72px; gap: 4px; padding: 4px 5px; border-top: 1px solid var(--edge); font: .82rem Consolas, monospace; }
+.mini-record-row strong { text-align: right; }

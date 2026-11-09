@@ -5,13 +5,15 @@ import { defaultRadio, EngineerView, RadioFeed, StrategyView, useRadio } from '.
 import type { RadioSettings } from './radio';
 import { carName, CarSelect, Circuit, Driver, EventList, flag, LapComparison, MapView, Metric, Power, pos, split, Timing, Tyres } from './telemetry';
 import type { Lap, Network, Run, Snapshot } from './types';
+import { LapRecords, RaceLeaderboard } from './timing';
 
 
 const TABS = [
   ['wall', 'PIT WALL', 'ピットウォール'], ['ai', 'AI ENGINEER', 'レースエンジニア'],
   ['driver', 'DRIVER', 'ドライバーテレメトリー'], ['compare', 'LAP COMPARE', 'ラップ比較'],
   ['map', 'CIRCUIT', 'サーキット'], ['tyres', 'TYRES', 'タイヤ分析'], ['power', 'POWER UNIT', 'パワーユニット / エアロ'],
-  ['strategy', 'STRATEGY', 'レース戦略'], ['replay', 'REPLAY', 'セッションリプレイ'], ['setup', 'CONNECTION', '接続と診断'],
+  ['strategy', 'STRATEGY', 'レース戦略'], ['timing', 'LAP RECORDS', '周回記録'],
+  ['replay', 'REPLAY', 'セッションリプレイ'], ['setup', 'CONNECTION', '接続と診断'],
 ] as const;
 type Tab = typeof TABS[number][0];
 const currentTab = () => TABS.find(([key]) => key === location.hash.slice(1))?.[0] ?? 'wall';
@@ -129,7 +131,7 @@ function App() {
       <div className="page-head"><div><div className="eyebrow">{snap.replay ? 'ARCHIVE / REPLAY' : 'RACE OPERATIONS'} / {TABS.find(([t]) => t === tab)![1]}</div>
         <h1>{pageTitle}</h1></div>
         <div className="page-controls">
-          {!['ai', 'strategy', 'setup', 'replay'].includes(tab) && <CarSelect cars={snap.cars} selected={selected} onSelect={changeCar} />}
+          {!['ai', 'strategy', 'timing', 'setup', 'replay'].includes(tab) && <CarSelect cars={snap.cars} selected={selected} onSelect={changeCar} />}
           {tab !== 'setup' && <a className="button detach" href={'#' + tab} target="_blank" rel="noopener">別ウィンドウ ↗</a>}
         </div></div>
       {snap.source === 'DEMO' && <div className="demo-strip">DEMO SESSION <span>24台の合成UDPデータ · ゲーム内時間は8倍速</span></div>}
@@ -145,7 +147,7 @@ function App() {
           <Metric label="AHEAD" value={split(car?.lap?.frontGap)} hint={carName(car)} />
           <Metric label="RECORDING" value={snap.replay ? 'REPLAY' : snap.connection?.recording ? 'ARMED' : 'OFF'} hint={clock(snap.clock)} />
         </div>
-        <div className="wall"><Timing snap={snap} selected={selected} select={changeCar} />
+        <div className="wall"><RaceLeaderboard snap={snap} selected={selected} select={changeCar} />
           <aside>
             <MapView snap={snap} selected={selected} />
             <section className="panel"><div className="panel-head"><div><div className="eyebrow">LOCAL AI ENGINEER</div><h2>チーム無線</h2></div>
@@ -162,6 +164,7 @@ function App() {
       {tab === 'power' && <Power snap={snap} car={car} />}
       {tab === 'ai' && <EngineerView snap={snap} settings={radio} change={changeRadio} connected={connected} />}
       {tab === 'strategy' && <StrategyView snap={snap} />}
+      {tab === 'timing' && <LapRecords snap={snap} selected={selected} />}
       {tab === 'replay' && <Replay snap={snap} live={live} active={replay} setReplay={setReplay} selected={selected} select={changeCar} />}
       {tab === 'setup' && <Connection snap={liveNow ?? blank} />}
     </main>

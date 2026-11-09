@@ -226,6 +226,23 @@ def create_app(settings: Settings, path: Path, web: Path = DEFAULT_WEB, *, demo_
     def laps(run: Run, car: Car):
         return archive(run).laps(run, car)
 
+    @app.get("/api/timing")
+    def timing(run: Run, car: Car):
+        from .timing import read_timing
+        with archive(run).open() as db:
+            db.execute("BEGIN")
+            return read_timing(db, run, car)
+
+    @app.get("/api/timing/export")
+    def timing_export(run: Run, car: Car | None = None):
+        from .timing import read_timing
+        with archive(run).open() as db:
+            db.execute("BEGIN")
+            timing = read_timing(db, run, car)
+        suffix = "all-cars" if car is None else f"car-{car + 1}"
+        return Response(json.dumps(timing, ensure_ascii=False), media_type="application/json",
+                        headers={"Content-Disposition": f'attachment; filename="apex-{run}-{suffix}-timing.json"'})
+
     @app.get("/api/samples")
     def samples(run: Run, epoch: Epoch, car: Car, lap: Lap | None = None, until: Until = 1e12,
                 limit: Annotated[int, Query(ge=2, le=5000)] = 900):
