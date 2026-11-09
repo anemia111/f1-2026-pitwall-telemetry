@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1017">
+  <meta name="description" content="APEX Race Engineering の2026年版ピットウォール。24台の合成レースデータをブラウザで再生できます。">
+  <title>APEX | 2026 Pit Wall · 公開デモ</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%2362dded'/%3E%3Cpath fill='%230b1017' d='m5 25 9-18h6l7 18h-5l-1.5-4h-9L10 25Zm9-8h5l-2-5Z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./pitwall.css">
+  <link rel="stylesheet" href="./pages.css">
+  <script type="module" src="./demo.js"></script>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="./"><span class="mark">A</span><span><b>APEX</b><small>RACE ENGINEERING</small></span></a>
+    <div class="product">2026 <strong>PIT WALL</strong></div>
+    <div class="statusbar"><span class="tag demo">公開デモ</span><span class="tag frame">24 CARS</span></div>
+  </header>
+  <nav aria-label="デモの画面"><a href="#timing">TIMING</a><a href="#circuit">CIRCUIT</a><a href="#strategy">STRATEGY</a><a href="#about">ABOUT</a></nav>
+  <main>
+    <div class="page-head"><div><div class="eyebrow">RACE OPERATIONS / PUBLIC DEMO</div><h1>2026 ピットウォール</h1></div></div>
+    <div class="demo-strip">DEMO REPLAY <span>24台の合成データ · ゲーム内時間は8倍速</span></div>
+    <section class="panel padded">
+      <div class="eyebrow">REPLAY TRANSPORT</div><h2>レースを再生</h2>
+      <div class="transport">
+        <button class="primary" id="play" disabled>再生</button>
+        <label class="field compact" for="seek">再生位置</label>
+        <input type="range" id="seek" min="0" max="0" step="1" value="0" disabled>
+        <span class="mono" id="time">0:00</span>
+        <label class="field compact">再生速度<select id="rate"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+        <button id="sc" disabled>SC導入へ</button>
+      </div>
+      <p class="muted" id="load" role="status">合成レースを読み込み中…</p>
+    </section>
+    <div class="metric-grid">
+      <div class="metric"><span>SESSION LAP</span><strong id="lap">N/A</strong></div>
+      <div class="metric"><span>RACE CONTROL</span><strong id="flag">N/A</strong></div>
+      <div class="metric"><span>SELECTED SPEED</span><strong id="speed">N/A</strong><small>km/h</small></div>
+      <div class="metric"><span>GEAR / RPM</span><strong id="gear">N/A</strong></div>
+      <div class="metric"><span>THROTTLE / BRAKE</span><strong id="pedals">N/A</strong></div>
+    </div>
+    <div class="wall">
+      <section class="panel timing" id="timing">
+        <div class="panel-head"><div><div class="eyebrow">TIMING FEED</div><h2>タイミング</h2></div><span class="tag">24 CARS</span></div>
+        <div class="table-scroll"><table><thead><tr><th>POS</th><th>DRIVER</th><th>TYRE</th><th>LAP</th><th>BEST</th><th>LAST</th><th>AHEAD</th><th>LEADER</th><th>AERO</th></tr></thead>
+          <tbody id="cars"></tbody></table></div>
+      </section>
+      <aside>
+        <section class="panel map" id="circuit">
+          <div class="panel-head"><div><div class="eyebrow">WORLD POSITION / DEMO COURSE</div><h2>サーキットマップ</h2></div></div>
+          <svg viewBox="0 0 680 370" role="img" aria-label="合成コースの走行軌跡と24台の位置">
+            <path id="track" fill="none" stroke="#4c5c70" stroke-width="8" stroke-linecap="round"></path><g id="markers"></g>
+          </svg>
+          <div class="readout"><span>合成UDPの走行座標</span><span class="accent">選択中のドライバー</span></div>
+        </section>
+        <section class="panel" id="strategy">
+          <div class="panel-head"><div><div class="eyebrow">CONDITIONAL MODEL / PLAYER CAR</div><h2>ピット戦略</h2></div><span class="tag" id="recommend">推奨 N/A</span></div>
+          <div class="padded"><p id="reason" class="muted">読み込み中…</p><p id="wear"></p></div>
+          <div class="table-scroll"><table><thead><tr><th>PLAN</th><th>PIT LAP</th><th>残り s</th><th>PIT LOSS s</th></tr></thead><tbody id="plans"></tbody></table></div>
+        </section>
+      </aside>
+    </div>
+    <section class="panel padded" id="about">
+      <div class="eyebrow">LOCAL WINDOWS EDITION</div><h2>PS5につなぐには</h2>
+      <p>この公開ページでは、あらかじめ生成した24台の合成レースを再生できます。Windows版では、同じLANのPS5からUDP 2026を受信し、セッションの記録・書き出しと日本語のレースエンジニア機能を使えます。</p>
+      <p>ゲーム側の設定は、UDP TelemetryをON、送信先をPCのIPv4、ポート20777、フォーマット2026です。</p>
+    </section>
+  </main>
+  <footer><span>APEX RACE ENGINEERING</span><span>SYNTHETIC DATA · PUBLIC REPLAY</span></footer>
+</body>
+</html>

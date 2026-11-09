@@ -1,0 +1,12 @@
+#timing, #circuit, #strategy, #about { scroll-margin-top: 12px; }
+#seek { min-width: 95px; }
+#load { margin-top: 9px; }
+#strategy .padded p + p { margin-top: 6px; }
+#cars .driver { min-height: 28px; justify-content: center; }
+@media (max-width: 1130px) {
+  .wall aside { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 740px) {
+  .wall aside { grid-template-columns: minmax(0, 1fr); }
+  #seek { flex-basis: 110px; }
+}

@@ -2,6 +2,8 @@
 
 PS5版 EA SPORTS F1 25「2026 Season Pack」の UDP を Windows PC で受信し、ブラウザから分析・記録・再生するローカルアプリです。最大24台のタイミング、テレメトリー、条件付きの戦略比較、日本語のチーム無線を1つの画面から操作できます。
 
+セットアップ前に、24台の合成レースを [GitHub Pagesの公開デモ](https://anemia111.github.io/f1-2026-pitwall-telemetry-pages/) で再生できます。実機のUDP受信・保存・日本語の質問応答にはWindows版を使用します。
+
 ## Windows で起動
 
 1. [Python 3.12](https://www.python.org/downloads/) をインストールします。セットアップには Windows の Python ランチャー `py` を使います。
@@ -66,5 +68,7 @@ PowerShell から起動する場合
 # ビルド済みZIPを再作成
 .\.venv\Scripts\python.exe -m scripts.package ..\APEX-2026-Pit-Wall-Windows.zip
 ```
+
+公開デモを再生成するには `python -m scripts.build_pages <出力先>` を実行します。生成処理の入力は合成UDPです。出力先に作られた静的ファイルを公開用リポジトリへ反映できます。
 
 UDP・アーカイブ構造は [プロトコル](docs/udp.md)、アプリ構造は [アーキテクチャ](docs/architecture.md)、検証状況と残作業は [進捗](PROGRESS.md) を参照してください。元の実装は MIT ライセンスです。F1 と EA の名称は互換性を示すために使っています。
