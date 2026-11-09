@@ -2,7 +2,7 @@
 
 PS5版 EA SPORTS F1 25「2026 Season Pack」の UDP を Windows PC で受信し、ブラウザから分析・記録・再生するローカルアプリです。最大24台のタイミング、テレメトリー、条件付きの戦略比較、日本語のチーム無線を1つの画面から操作できます。
 
-セットアップ前に、24台の合成レースを [GitHub Pagesの公開デモ](https://anemia111.github.io/f1-2026-pitwall-telemetry-pages/) で再生できます。実機のUDP受信・保存・日本語の質問応答にはWindows版を使用します。
+セットアップ前に、24台の合成レースを [GitHub Pagesの公開デモ](https://anemia111.github.io/f1-2026-pitwall-telemetry-pages/) で再生できます。PIT WALLで順位と選択車の走行軌跡を確認し、REPLAYで再生位置を変えられます。実機のUDP受信・保存・日本語の質問応答にはWindows版を使用します。
 
 ## Windows で起動
 
