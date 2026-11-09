@@ -61,6 +61,10 @@ PowerShell から起動する場合
 .\.venv\Scripts\python.exe tests/browser_smoke.py --channel msedge
 # 保存した生パケットを現在のパーサーで再検査
 .\.venv\Scripts\python.exe -m scripts.verify_capture .\apex-session.udp
+# 保存済みの予測と実測結果を照合
+.\.venv\Scripts\python.exe -m scripts.audit .\data\pitwall.sqlite3 SESSION_ID
+# ビルド済みZIPを再作成
+.\.venv\Scripts\python.exe -m scripts.package ..\APEX-2026-Pit-Wall-Windows.zip
 ```
 
 UDP・アーカイブ構造は [プロトコル](docs/udp.md)、アプリ構造は [アーキテクチャ](docs/architecture.md)、検証状況と残作業は [進捗](PROGRESS.md) を参照してください。元の実装は MIT ライセンスです。F1 と EA の名称は互換性を示すために使っています。

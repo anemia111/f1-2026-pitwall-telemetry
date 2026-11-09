@@ -117,7 +117,7 @@ function App() {
       <a href="#wall" className="brand"><span className="mark">A</span><span><b>APEX</b><small>RACE ENGINEERING</small></span></a>
       <div className="product">2026 <strong>PIT WALL</strong></div>
       <div className="statusbar">
-        {snap.replay && <button className="tag demo" onClick={() => setReplay(null)}>REPLAY 終了</button>}
+        {snap.replay && <button className="tag demo" onClick={() => { location.hash = 'wall'; setReplay(null); }}>REPLAY 終了</button>}
         <span className={`tag ${snap.source === 'DEMO' ? 'demo' : 'live'}`}>{snap.source === 'DEMO' ? 'DEMO / 模擬データ' : 'LIVE / 実機入力'}</span>
         <span className={`tag ${connected && live?.online ? 'live' : 'offline'}`}><i />{connected && live?.online ? 'UDP 2026' : connected ? 'UDP 待機' : '再接続中'}</span>
         <span className="tag frame">24 CARS</span>
@@ -162,15 +162,16 @@ function App() {
       {tab === 'power' && <Power snap={snap} car={car} />}
       {tab === 'ai' && <EngineerView snap={snap} settings={radio} change={changeRadio} connected={connected} />}
       {tab === 'strategy' && <StrategyView snap={snap} />}
-      {tab === 'replay' && <Replay snap={snap} live={live} active={replay} setReplay={setReplay} />}
+      {tab === 'replay' && <Replay snap={snap} live={live} active={replay} setReplay={setReplay} selected={selected} select={changeCar} />}
       {tab === 'setup' && <Connection snap={liveNow ?? blank} />}
     </main>
     <footer><span>APEX RACE ENGINEERING</span><span>LOCAL TELEMETRY · F1 25 / 2026 SEASON PACK</span></footer>
   </>;
 }
 
-function Replay({ snap, live, active, setReplay }: {
+function Replay({ snap, live, active, setReplay, selected, select }: {
   snap: Snapshot; live: Snapshot | null; active: Snapshot | null; setReplay: (v: Snapshot | null) => void;
+  selected: number; select: (id: number) => void;
 }) {
   const [runs, error] = useQuery<Run[]>('/api/runs', 3000);
   const [id, setId] = useState<string | null>(active?.run ?? null);
@@ -250,7 +251,7 @@ function Replay({ snap, live, active, setReplay }: {
           <span className="mono">L{l.lap}</span><button onClick={() => jump(l.start)}>{lapTime(l.ms)}</button><small>{l.samples} SAMPLES</small>
         </div>)}</div></section>
     </div>}
-    {active && <Timing snap={snap} selected={snap.player} select={() => { location.hash = 'driver'; }} />}
+    {active && <Timing snap={snap} selected={selected} select={id => { select(id); location.hash = 'driver'; }} />}
   </>;
 }
 

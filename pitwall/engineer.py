@@ -115,11 +115,16 @@ class Engineer:
             self.revision = {"previous": previous, "current": plan_key, "time": snap["clock"],
                              "reason": self.strategy["reason"]}
             if best:
-                say("HIGH", "strategy", f"条件付きでプラン{best['id']}。{best['pitLap']}周目を候補に。", {
+                evidence = {
                     "previous": previous, "recommendation": best, "plans": self.strategy["plans"], "model": model,
                     "inputs": self.strategy["input"], "assumptions": self.strategy["assumptions"],
                     "reason": self.strategy["reason"],
-                }, 10)
+                }
+                item = self.emit(snap, "HIGH", "strategy",
+                                 f"条件付きでプラン{best['id']}。{best['pitLap']}周目を候補に。", evidence, now, 10)
+                sent.append(item or {"topic": "strategy", "time": snap["clock"], "lap": lap.get("currentLapNum"),
+                                     "evidence": evidence, "reason": self.strategy["reason"],
+                                     "confidence": "条件付き推定", "selectedPlan": None, "outcome": None})
             elif previous and snap["online"]:
                 say("HIGH", "strategy-unavailable", "戦略候補を保留。条件が変わりました。", self.strategy, 10)
             self.last_plan_key = plan_key
@@ -170,6 +175,12 @@ def answer(topic: str | None, snap: dict, strategy: dict, text: str = "", coachi
     if topic == "tyres":
         m = strategy["model"]
         if m["remaining"] is not None:
+            if "最後" in text or "ゴール" in text:
+                n, total = strategy["input"].get("lap"), strategy["input"].get("total")
+                if n and total and total >= n:
+                    left = total - n + 1
+                    status = "今周を含む残り周回以上" if m["remaining"] >= left else "今周を含む残り周回を下回る"
+                    return f"摩耗閾値まで約{m['remaining']:.1f}周。推定寿命は{status}見込みです。"
             return f"最大摩耗{m['wear']:.0f}パーセント。現在の摩耗率では設定閾値まで約{m['remaining']:.1f}周です。"
         return f"最大摩耗{m['wear']:.0f}パーセント。残り寿命は推定できません。" if m["wear"] is not None else "タイヤ摩耗と残り寿命は取得できていません。"
     if topic and (topic == "pit" or topic.startswith("plan_")):

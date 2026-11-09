@@ -44,6 +44,7 @@ class LiveState:
     events: deque[dict] = field(default_factory=lambda: deque(maxlen=80))
     frames: OrderedDict[int, dict[int, Packet]] = field(default_factory=OrderedDict)
     sample_at: float = -1e9
+    sampled_frame: int = -1
     last_frame: int = -1
     observed_laps: dict[int, dict[int, dict]] = field(default_factory=dict)
     previous_laps: dict[int, dict] = field(default_factory=dict)
@@ -68,7 +69,9 @@ class LiveState:
         self.previous_laps.clear()
         self.track.clear()
         self.sample_at = -1e9
+        self.sampled_frame = -1
         self.ended = self.red = False
+        self.safety_override = None
 
     def ingest(self, packet: Packet, now: float) -> tuple[dict | None, list[tuple[int, int, dict]]]:
         h = packet.header
@@ -114,16 +117,22 @@ class LiveState:
             if self.last_frame >= 0 and h.overall > self.last_frame + 1:
                 self.counts["frameGaps"] += h.overall - self.last_frame - 1
             self.last_frame = h.overall
-        if h.kind not in (2, 6):
+        if h.kind not in (0, 2, 6):
             return None, []
         frame = self.frames.setdefault(h.overall, {})
         frame[h.kind] = packet
         if len(self.frames) > 16:
             self.frames.popitem(last=False)
-        if len(frame) != 2 or now - self.sample_at < .095:
+        if now - self.sample_at < .095:
+            return None, []
+        if not (h.overall > self.sampled_frame and {0, 2, 6} <= frame.keys()):
+            frame = next((packets for number, packets in reversed(self.frames.items())
+                          if self.sampled_frame < number < h.overall - 1 and {2, 6} <= packets.keys()), {})
+        if not frame:
             return None, []
         self.sample_at = now
-        return None, self.sample(frame[2], frame[6], now)
+        self.sampled_frame = frame[2].header.overall
+        return None, self.sample(frame[2], frame[6], now, frame.get(0))
 
     def get(self, kind: int, now: float, car: int = -1) -> Packet | None:
         stored = self.latest.get((kind, car))
@@ -210,14 +219,13 @@ class LiveState:
                 c["lap"]["rearGap"] = by_position.get(c["lap"]["carPosition"] + 1, {}).get("frontGap")
         return cars
 
-    def sample(self, lap: Packet, telemetry: Packet, now: float) -> list[tuple[int, int, dict]]:
+    def sample(self, lap: Packet, telemetry: Packet, now: float, motion: Packet | None) -> list[tuple[int, int, dict]]:
         p = self.get(4, now)
         active = p.field("numActiveCars") if p else 0
         session = self.get(1, now)
         network = session.field("networkGame") if session else None
         status = self.get(7, now)
         damage = self.get(10, now)
-        motion = self.get(0, now)
         elapsed = now - self.started
         rows = []
         for i in range(MAX_CARS):
@@ -250,7 +258,7 @@ class LiveState:
                                      "age": s.get("tyresAgeLaps"), "tyre": s.get("visualTyreCompound"), "wear": wear,
                                      "pit": bool(l["pitStatus"]) or bool(previous and previous["n"] == n and previous["pit"])}
             point = {}
-            if motion and motion.header.overall == lap.header.overall:
+            if motion:
                 point = motion.row("carMotionData", i, MOTION_KEYS)
                 x, z = point["worldPositionX"], point["worldPositionZ"]
                 if i == self.player and valid and x is not None and z is not None and (x or z):

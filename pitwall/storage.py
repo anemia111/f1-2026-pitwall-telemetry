@@ -6,6 +6,7 @@ import logging
 import sqlite3
 import tempfile
 from collections.abc import Iterator
+from contextlib import closing, contextmanager
 from pathlib import Path
 from queue import Empty, Full, Queue
 from threading import Thread
@@ -61,9 +62,13 @@ class Store:
         self.thread = Thread(target=self.write, name="archive-writer", daemon=True)
         self.thread.start()
 
-    def open(self) -> sqlite3.Connection:
-        # Read connections get closed when they leave scope on CPython.
+    def connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.path, timeout=10)
+
+    @contextmanager
+    def open(self) -> Iterator[sqlite3.Connection]:
+        with closing(self.connect()) as db, db:
+            yield db
 
     def put(self, *operations: tuple) -> bool:
         if self.error:
@@ -77,7 +82,7 @@ class Store:
             return False
 
     def write(self) -> None:
-        db = self.open()
+        db = self.connect()
         try:
             stop = False
             while not stop:
