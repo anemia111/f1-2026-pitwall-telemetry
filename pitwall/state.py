@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from time import monotonic
 
 from .protocol_2026 import LABELS, MAX_CARS, Packet
+from .timing import LiveTiming, lap_ms
 
 ROW_FIELDS = {0: "carMotionData", 2: "lapData", 4: "participants", 5: "carSetupData",
               6: "carTelemetryData", 7: "carStatusData", 8: "classificationData",
@@ -16,10 +17,6 @@ MOTION_KEYS = ("worldPositionX", "worldPositionY", "worldPositionZ")
 STATUS_PRIVATE = {"frontBrakeBias", "fuelInTank", "fuelCapacity", "fuelRemainingLaps", "fuelMix",
                   "ersDeployMode", "ersStoreEnergy", "ersDeployedThisLap", "ersHarvestedThisLapMGUK",
                   "ersHarvestedThisLapMGUH", "enginePowerICE", "enginePowerMGUK"}
-
-
-def lap_ms(row: dict, key: str) -> int:
-    return row[key + "MinutesPart"] * 60000 + row[key + "MSPart"]
 
 
 def event_view(packet: Packet, elapsed: float) -> dict:
@@ -56,6 +53,7 @@ class LiveState:
     ended: bool = False
     red: bool = False
     safety_override: tuple[int, int, float] | None = None
+    timing: LiveTiming = field(default_factory=LiveTiming)
 
     def reset(self, packet: Packet, now: float) -> None:
         self.uid, self.run, self.started = packet.header.uid, None, now
@@ -66,6 +64,7 @@ class LiveState:
         self.reset_epoch()
 
     def reset_epoch(self) -> None:
+        self.timing = LiveTiming()
         self.latest.clear()
         self.frames.clear()
         self.observed_laps.clear()
@@ -119,6 +118,7 @@ class LiveState:
             self.counts["late"] += 1
             return None, []
         self.latest[key] = packet, now
+        self.timing.ingest(packet)
         if h.kind == 6:
             if self.last_frame >= 0 and h.overall > self.last_frame + 1:
                 self.counts["frameGaps"] += h.overall - self.last_frame - 1

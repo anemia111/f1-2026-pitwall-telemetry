@@ -3,13 +3,38 @@ from bisect import bisect_right
 from dataclasses import dataclass, field
 from sqlite3 import Connection
 
-from .protocol_2026 import MAX_CARS, parse
-from .state import lap_ms
+from .protocol_2026 import MAX_CARS, Packet, parse
 
 MINIS_PER_SECTOR = 10
 LAP_KEYS = ("currentLapNum", "resultStatus", "lapDistance",
             "currentLapTimeInMS", "lastLapTimeInMS", "currentLapInvalid", "sector",
             "sector1TimeMSPart", "sector1TimeMinutesPart", "sector2TimeMSPart", "sector2TimeMinutesPart")
+SEGMENTS = 3 + 3 * MINIS_PER_SECTOR
+
+
+def lap_ms(row: dict, key: str) -> int:
+    return row[key + "MinutesPart"] * 60000 + row[key + "MSPart"]
+
+
+def timing_status(ms, valid, overall, personal):
+    if ms is None:
+        return None
+    if valid and overall == ms:
+        return "overall"
+    if valid and personal == ms:
+        return "personal"
+    return "other"
+
+
+def update_bests(bests, segments):
+    for i, (ms, valid) in enumerate(segments):
+        if ms is not None and valid and (bests[i] is None or ms < bests[i]):
+            bests[i] = ms
+
+
+def overall_bests(personal):
+    return [min((ms for ms in column if ms is not None), default=None)
+            for column in zip(*personal)] if personal else [None] * SEGMENTS
 
 
 def boundaries(length: int, s2: float | None, s3: float | None) -> list[float]:
@@ -64,24 +89,31 @@ class LapRecord:
         self.progress = max(self.progress, d)
         self.previous = d, ms, game_time
 
-    def finish(self, epoch: int, car: int, lap: int) -> dict:
+    def sector_times(self):
         sectors = self.sectors.copy()
         source = ["game" if value is not None else None for value in sectors]
         s1, s2, s3 = sectors
         if self.total and s1 and s2 and s3 is None and self.total > s1 + s2:
             sectors[2], source[2] = self.total - s1 - s2, "difference"
+        return sectors, source
+
+    def mini_times(self):
         times = self.crossings.copy()
+        s1, s2, _ = self.sectors
         for i, value in ((MINIS_PER_SECTOR, s1),
                          (2 * MINIS_PER_SECTOR, s1 + s2 if s1 and s2 else None),
                          (3 * MINIS_PER_SECTOR, self.total)):
             if value is not None:
                 times[i] = value
-        minis = []
-        for i, (a, b) in enumerate(zip(self.gates, self.gates[1:])):
+        for i in range(len(self.gates) - 1):
             x, y = times.get(i), times.get(i + 1)
-            minis.append({"number": i + 1, "sector": i // MINIS_PER_SECTOR + 1,
-                          "fromM": round(a, 2), "toM": round(b, 2),
-                          "ms": round(y - x, 1) if x is not None and y is not None and y > x else None})
+            yield round(y - x, 1) if x is not None and y is not None and y > x else None
+
+    def finish(self, epoch: int, car: int, lap: int) -> dict:
+        sectors, source = self.sector_times()
+        minis = [{"number": i + 1, "sector": i // MINIS_PER_SECTOR + 1,
+                  "fromM": round(a, 2), "toM": round(b, 2), "ms": ms}
+                 for i, (a, b, ms) in enumerate(zip(self.gates, self.gates[1:], self.mini_times()))]
         return {"epoch": epoch, "car": car, "lap": lap, "start": self.start, "end": self.end,
                 "ms": self.total, "valid": bool(self.flags & 1) if self.total and self.flags is not None else
                 False if self.invalid else None,
@@ -91,12 +123,152 @@ class LapRecord:
                 "minis": minis}
 
 
-def read_timing(db: Connection, run: str, car: int | None) -> dict:
+def record_segments(record):
+    for sector in record["sectors"]:
+        yield sector["ms"], sector["valid"] if sector["valid"] is not None else record["valid"] is not False
+    for mini in record["minis"]:
+        yield mini["ms"], record["valid"] is not False and record["sectors"][mini["sector"] - 1]["valid"] is not False
+
+
+class LiveTiming:
+    """Track crossings from the live Lap Data stream independently of recording."""
+
+    def __init__(self) -> None:
+        self.gates: list[float] = []
+        self.current: dict[int, tuple[int, LapRecord]] = {}
+        self.previous: dict[int, int] = {}
+        self.completed: dict[int, dict[int, LapRecord]] = {}
+        self.history: dict[int, list[dict]] = {}
+        self.personal: dict[int, list[float | None]] = {}
+
+    def ingest(self, packet: Packet) -> None:
+        if packet.header.kind == 1:
+            if not self.gates:
+                self.gates = boundaries(packet.field("trackLength"), packet.field("sector2LapDistanceStart"),
+                                        packet.field("sector3LapDistanceStart"))
+            return
+        if packet.header.kind == 11:
+            car = packet.field("carIdx")
+            if car >= MAX_CARS:
+                return
+            history = [packet.row("lapHistoryData", i) for i in range(packet.field("numLaps"))]
+            if history != self.history.get(car):
+                self.history[car] = history
+                self.refresh(car)
+            return
+        if packet.header.kind != 2:
+            return
+        for car in range(MAX_CARS):
+            row = packet.row("lapData", car, LAP_KEYS)
+            lap = row["currentLapNum"]
+            if not lap or row["resultStatus"] < 2:
+                continue
+            prior, record = self.current.get(car, (0, None))
+            if lap < prior:
+                continue
+            if lap != prior:
+                if record is not None and lap == prior + 1:
+                    record.total = row["lastLapTimeInMS"] or None
+                    self.completed.setdefault(car, {})[prior] = record
+                    self.previous[car] = prior
+                    self.refresh(car)
+                else:
+                    self.previous.pop(car, None)
+                record = LapRecord(self.gates)
+                self.current[car] = lap, record
+            if not record.gates and self.gates:
+                record.gates = self.gates
+            record.update(row, packet.header.time, packet.header.time)
+
+    def refresh(self, car: int) -> None:
+        bests = [None] * SEGMENTS
+        laps = self.completed.get(car, {})
+        history = self.history.get(car, [])
+        for lap in laps.keys() | set(range(1, len(history) + 1)):
+            record = laps.get(lap) or LapRecord([])
+            if lap <= len(history):
+                apply_history(record, history[lap - 1])
+            update_bests(bests, record_segments(record.finish(0, car, lap)))
+        self.personal[car] = bests
+
+    def snapshot(self, cars: list[dict]) -> tuple[dict[int, list[float | None]], list[float | None]]:
+        personal = self.personal.copy()
+        current = {}
+        for car in cars:
+            i, lap = car["id"], car["lap"]
+            entry = self.current.get(i)
+            if not lap or not entry or entry[0] != lap["currentLapNum"]:
+                continue
+            number, record = entry
+            row = record.finish(0, i, number)
+            bests = personal.get(i, [None] * SEGMENTS).copy()
+            update_bests(bests, record_segments(row))
+            personal[i] = bests
+            current[i] = row
+        overall = overall_bests(list(personal.values()))
+        for car in cars:
+            i, lap = car["id"], car["lap"]
+            if not lap:
+                continue
+            own = personal.get(i, [None] * SEGMENTS)
+            row = current.get(i)
+            previous_lap = lap["currentLapNum"] - 1
+            previous = self.completed.get(i, {}).get(previous_lap) if self.previous.get(i) == previous_lap else None
+            if previous and not lap.get("previousSector3"):
+                lap["previousSector3"] = previous.sector_times()[0][2]
+            prior_valid = False
+            if previous:
+                prior_valid = bool(previous.flags & 8) if previous.flags is not None else not previous.invalid
+            elif lap.get("previousSector3"):
+                history = self.history.get(i, [])
+                prior_valid = 1 <= previous_lap <= len(history) and bool(history[previous_lap - 1]["lapValidBitFlags"] & 8)
+            sector_ranks = [
+                timing_status(lap.get(key), row is not None and row["valid"] is not False and
+                              row["sectors"][j]["ms"] == lap.get(key), overall[j], own[j])
+                for j, key in enumerate(("sector1", "sector2"))
+            ]
+            sector_ranks.append(timing_status(lap.get("previousSector3"), prior_valid, overall[2], own[2]))
+            segments = list(record_segments(row)) if row else []
+            mini_ranks = [timing_status(ms, valid, overall[j], own[j])
+                          for j, (ms, valid) in enumerate(segments[3:], start=3)]
+            car["timingRanks"] = {"sectors": sector_ranks, "minis": mini_ranks}
+        return personal, overall
+
+
+def apply_history(record, row):
+    record.total = row["lapTimeInMS"] or record.total
+    for i in range(3):
+        record.sectors[i] = lap_ms(row, f"sector{i + 1}Time") or record.sectors[i]
+    record.flags = row["lapValidBitFlags"]
+
+
+def rank_records(records, references):
+    bests = {}
+    for record in records:
+        key = record["epoch"], record["car"]
+        update_bests(bests.setdefault(key, [None] * SEGMENTS), record_segments(record))
+    overall = {
+        epoch: overall_bests([best for (e, _), best in bests.items() if e == epoch])
+        for epoch in {e for e, _ in bests}
+    }
+    if references:
+        epoch, personal, session = references
+        update_bests(overall.setdefault(epoch, [None] * SEGMENTS), ((ms, True) for ms in session))
+        for car, values in personal.items():
+            update_bests(bests.setdefault((epoch, car), [None] * SEGMENTS), ((ms, True) for ms in values))
+    for record in records:
+        epoch, car = record["epoch"], record["car"]
+        for part, (ms, valid), best, own in zip(record["sectors"] + record["minis"], record_segments(record),
+                                               overall[epoch], bests[epoch, car]):
+            part["rank"] = timing_status(ms, valid, best, own)
+
+
+def read_timing(db: Connection, run: str, car: int | None, *, ranked=False, references=None) -> dict:
     """Use the raw stream so existing captures and laps without CarTelemetry are included."""
-    cars = range(MAX_CARS) if car is None else (car,)
     records = []
     epochs = [e for (e,) in db.execute("SELECT DISTINCT epoch FROM raw WHERE run=? ORDER BY epoch", (run,))]
     for epoch in epochs:
+        cars = range(MAX_CARS) if car is None or (ranked and (references is None or references[0] != epoch)) else (car,)
         gates = []
         for (raw,) in db.execute("SELECT payload FROM raw WHERE run=? AND epoch=? AND kind=1 AND car=-1 "
                                  "ORDER BY t DESC, seq DESC LIMIT 16", (run, epoch)):
@@ -149,9 +321,10 @@ def read_timing(db: Connection, run: str, car: int | None) -> dict:
                 if key not in laps:
                     laps[key] = LapRecord(gates)
                 record = laps[key]
-                record.total = row["lapTimeInMS"] or record.total
-                record.sectors = [official or recorded for official, recorded in zip(sectors, record.sectors)]
-                record.flags = row["lapValidBitFlags"]
+                apply_history(record, row)
         records.extend(record.finish(epoch, i, lap) for (i, lap), record in sorted(laps.items()))
+    if ranked:
+        rank_records(records, references)
+        records = [record for record in records if car is None or record["car"] == car]
     return {"run": run, "miniSectorsPerSector": MINIS_PER_SECTOR, "laps": records}
 

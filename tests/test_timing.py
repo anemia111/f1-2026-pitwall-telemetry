@@ -2,7 +2,8 @@ from pytest import approx
 
 from pitwall.demo import Builder
 from pitwall.storage import Store
-from pitwall.timing import boundaries, read_timing
+from pitwall.protocol_2026 import parse
+from pitwall.timing import LiveTiming, boundaries, read_timing
 
 
 def test_raw_archive_lap_sectors_and_gaps(tmp_path):
@@ -37,15 +38,57 @@ def test_raw_archive_lap_sectors_and_gaps(tmp_path):
         store.queue.join()
         with store.open() as db:
             report = read_timing(db, "run", None)
+            ranked = read_timing(db, "run", 0, ranked=True)
         one, two, rewound = report["laps"]
         assert one["ms"] == 3000 and one["valid"]
         assert [s["ms"] for s in one["sectors"]] == [1000, 1000, 1000]
         assert len(one["minis"]) == 30
         assert one["minis"][0]["ms"] == approx(100)
         assert one["minis"][2]["ms"] is None
+        assert ranked["laps"][0]["sectors"][0]["rank"] == "overall"
+        assert ranked["laps"][0]["minis"][0]["rank"] == "overall"
+        assert ranked["laps"][0]["minis"][2]["rank"] is None
+        assert ranked["laps"][1]["sectors"][0]["rank"] == "other"
         assert two["ms"] == 3060 and two["valid"] is False
         assert rewound["epoch"] == 1 and rewound["ms"] is None and not rewound["minis"]
         assert boundaries(300, 0, 200) == []
     finally:
         store.close()
+
+
+def test_live_ranks_compare_matching_segments_and_discard_invalid_bests():
+    timing = LiveTiming()
+    session = Builder(1, 0, 0, 9)
+    session.write({"trackLength": 300, "sector2LapDistanceStart": 100., "sector3LapDistanceStart": 200.})
+    timing.ingest(parse(bytes(session.data)))
+
+    def feed(frame, at, distance, times, lap=1, invalid=False):
+        packet = Builder(2, frame, at, 9)
+        for car, ms in enumerate(times):
+            packet.row("lapData", car, currentLapNum=lap, resultStatus=2, lapDistance=distance,
+                       currentLapTimeInMS=ms, currentLapInvalid=int(invalid and car == 0),
+                       lastLapTimeInMS=(3000 + car * 300) if lap > 1 else 0,
+                       sector=int(distance // 100), sector1TimeMSPart=ms if distance >= 100 else 0)
+        timing.ingest(parse(bytes(packet.data)))
+
+    def ranks(lap, sector1=None):
+        cars = [{"id": car, "lap": {"currentLapNum": lap, "sector1": ms}}
+                for car, ms in enumerate(sector1 or (None, None))]
+        timing.snapshot(cars)
+        return [car["timingRanks"] for car in cars]
+
+    feed(1, 0, 0, (0, 0))
+    feed(2, .1, 10, (100, 110))
+    first, second = ranks(1)
+    assert first["minis"][:2] == ["overall", None]
+    assert second["minis"][:2] == ["personal", None]
+    feed(3, 1.1, 100, (1000, 1100))
+    first, second = ranks(1, (1000, 1100))
+    assert first["sectors"][0] == "overall"
+    assert second["sectors"][0] == "personal"
+    feed(4, 3.3, 0, (0, 0), lap=2)
+    feed(5, 3.5, 10, (90, 130), lap=2, invalid=True)
+    first, second = ranks(2)
+    assert first["minis"][0] == "other"
+    assert second["minis"][0] == "other"
 

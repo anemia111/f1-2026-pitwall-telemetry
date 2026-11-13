@@ -229,9 +229,11 @@ def create_app(settings: Settings, path: Path, web: Path = DEFAULT_WEB, *, demo_
     @app.get("/api/timing")
     def timing(run: Run, car: Car):
         from .timing import read_timing
+        published = engine().timing_reference
+        references = published[1] if published and published[0] == run else None
         with archive(run).open() as db:
             db.execute("BEGIN")
-            return read_timing(db, run, car)
+            return read_timing(db, run, car, ranked=True, references=references)
 
     @app.get("/api/timing/export")
     def timing_export(run: Run, car: Car | None = None):

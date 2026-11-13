@@ -1,4 +1,5 @@
 export type Metrics = Record<string, number | null | undefined>;
+export type TimingRank = 'overall' | 'personal' | 'other';
 export type Sample = {
   t: number; d: number; ms: number; speed: number; rpm?: number; engineRPM: number; gear: number;
   throttle: number; brake: number; steer: number; valid: boolean;
@@ -12,6 +13,7 @@ export type Car = {
   participant: { raceNumber: number; teamId: number } | null;
   lap: Metrics | null; status: Metrics | null; aero: Metrics | null; result: Metrics | null;
   motion: Metrics | null; telemetry: (Partial<Sample> & { engineTemperature?: number }) | null;
+  timingRanks?: { sectors: (TimingRank | null)[]; minis: (TimingRank | null)[] };
   damage: (Partial<Sample> & { engineDamage?: number; frontLeftWingDamage?: number; frontRightWingDamage?: number }) | null;
 };
 export type Zone = { zoneStart: number; zoneEnd: number };

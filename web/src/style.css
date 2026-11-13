@@ -172,7 +172,12 @@ footer { padding: 13px clamp(10px, 3vw, 36px); border-top: 1px solid var(--edge)
 .leader-sector { min-width: 42px; text-align: center; font-size: 10px; }
 .mini-rail { display: grid; grid-template-columns: repeat(10, 1fr); gap: 1px; margin-top: 1px; height: 3px; }
 .mini-rail span { background: #344553; }
-.mini-rail .passed { background: #6ad4cb; }
+.mini-rail .passed { background: #8292a1; }
+.rank-overall { color: var(--violet); }
+.rank-personal { color: var(--green); }
+.rank-other { color: #f6d75e; }
+.mini-rail :is(.rank-overall, .rank-personal, .rank-other) { background: currentColor; }
+.timing-legend { display: inline-flex; flex-wrap: wrap; gap: 8px; }
 .leader-footer { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; padding: 6px 9px; color: var(--muted); font-size: .72rem; }
 .timing-note { margin-top: 10px; }
 .mini-records { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; padding: 12px; }

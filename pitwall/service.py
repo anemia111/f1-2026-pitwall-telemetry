@@ -42,6 +42,7 @@ class Receiver(asyncio.DatagramProtocol):
         self.peaks: deque[float] = deque(maxlen=120)
         self.latest_event: deque[dict] = deque(maxlen=80)
         self.snapshot: dict = self.state.snapshot()
+        self.timing_reference = None
         self.serialized = "{}"
         self.coaching: str | None = None
         self.coached_lap: int | None = None
@@ -135,6 +136,8 @@ class Receiver(asyncio.DatagramProtocol):
     def publish(self, tick: int) -> None:
         now = monotonic()
         snap = self.state.snapshot(now)
+        personal, overall = self.state.timing.snapshot(snap["cars"])
+        self.timing_reference = (self.state.run, (self.state.epoch, personal, overall))
         if self.latest_event or tick % 5 == 0 or (not snap["online"] and self.snapshot.get("online")):
             events = list(self.latest_event) or [None]
             self.latest_event.clear()

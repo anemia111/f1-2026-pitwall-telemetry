@@ -72,11 +72,17 @@ def verify(args):
         expect(page.locator(".demo-strip")).to_be_visible(timeout=12000)
         expect(page.locator(".timing tbody tr")).to_have_count(24, timeout=12000)
         expect(page.get_by_role("img", name="受信した走行位置と走行軌跡")).to_be_visible()
+        expect(page.locator(".mini-rail .rank-overall").first).to_be_visible(timeout=12000)
+        expect(page.locator(".mini-rail .rank-personal").first).to_be_visible(timeout=12000)
+        expect(page.locator(".leader-sector > .rank-overall").first).to_be_visible(timeout=12000)
+        expect(page.locator(".leader-sector > .rank-personal").first).to_be_visible(timeout=12000)
+        expect(page.locator(".leader-sector > .rank-other").first).to_be_visible(timeout=20000)
         if args.screenshot:
             page.screenshot(path=args.screenshot)
         with page.expect_response(lambda r: "/api/timing?" in r.url and r.ok):
             page.get_by_role("link", name="LAP RECORDS", exact=True).click()
         expect(page.get_by_text("自動更新中", exact=True)).to_be_visible()
+        expect(page.locator(".mini-record-row strong[class^='rank-']").first).to_be_visible()
         with page.expect_response(lambda r: "/api/timing?" in r.url and r.ok, timeout=5000):
             expect(page.get_by_text("· 走行中", exact=False)).to_be_visible()
         page.get_by_role("link", name="DRIVER", exact=True).click()

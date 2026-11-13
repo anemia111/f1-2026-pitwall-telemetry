@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { lapTime, n, seconds, useQuery } from './api';
 import { carName, pos, split } from './telemetry';
-import type { Car, Run, Session, Snapshot } from './types';
+import type { Car, Run, Session, Snapshot, TimingRank } from './types';
 
 const MINI_COUNT = 10;
+const RANK_LABEL = { overall: '全体ベスト', personal: '自己ベスト', other: 'その他' };
 const TEAMS: Record<number, string> = {
   476: '#00d2be', 477: '#ed202b', 478: '#4781d9', 479: '#59b9ed',
   480: '#1ea483', 481: '#2685ad', 482: '#647ff5', 483: '#c1c7cc',
@@ -23,13 +24,28 @@ function driverCode(car: Car) {
     : car.participant?.raceNumber ? '#' + car.participant.raceNumber : name;
 }
 
-function SectorCell({ ms, complete, lap, previous }: {
-  ms: number | null | undefined; complete: number | null; lap: number; previous?: boolean;
+function TimingLegend() {
+  return <span className="timing-legend" aria-label="タイムの色分け">
+    <span className="rank-overall">全体ベスト</span>
+    <span className="rank-personal">自己ベスト</span>
+    <span className="rank-other">その他</span>
+  </span>;
+}
+
+function SectorCell({ ms, complete, sector, rank, minis }: {
+  ms: number | null | undefined; complete: number | null; sector: number;
+  rank?: TimingRank | null; minis?: (TimingRank | null)[];
 }) {
+  const description = [sector === 3 && ms ? '前周のS3' : '', rank ? RANK_LABEL[rank] : ''].filter(Boolean).join(' · ');
   return <td className="leader-sector">
-    <span title={previous && ms ? '前周のS3' : undefined}>{ms ? seconds(ms) : '—'}</span>
-    <div className="mini-rail" role="img" aria-label={complete == null ? `S${lap} ミニセクター進捗不明` : `S${lap} ミニセクター ${complete}/10 通過`}>
-      {Array.from({ length: MINI_COUNT }, (_, i) => <span key={i} className={complete != null && i < complete ? 'passed' : ''} />)}
+    <span className={rank ? `rank-${rank}` : undefined} title={description || undefined}>{ms ? seconds(ms) : '—'}</span>
+    <div className="mini-rail" role="img" aria-label={complete == null ? `S${sector} ミニセクター進捗不明` : `S${sector} ミニセクター ${complete}/10 通過`}>
+      {Array.from({ length: MINI_COUNT }, (_, i) => {
+        const miniRank = minis?.[i];
+        const passed = complete != null && i < complete;
+        return <span key={i} className={miniRank ? `rank-${miniRank}` : passed ? 'passed' : undefined}
+          title={miniRank ? `M${(sector - 1) * MINI_COUNT + i + 1} · ${RANK_LABEL[miniRank]}` : undefined} />;
+      })}
     </div>
   </td>;
 }
@@ -72,7 +88,8 @@ export function RaceLeaderboard({ snap, selected, select }: {
             {segments.map((ms, i) => {
               const done = d != null && d >= 0 && gates
                 ? Math.min(MINI_COUNT, Math.max(0, Math.floor(MINI_COUNT * (d - gates[i]) / (gates[i + 1] - gates[i])))) : null;
-              return <SectorCell key={i} ms={ms} complete={done} lap={i + 1} previous={i === 2} />;
+              return <SectorCell key={i} ms={ms} complete={done} sector={i + 1}
+                rank={car.timingRanks?.sectors[i]} minis={car.timingRanks?.minis.slice(i * MINI_COUNT, (i + 1) * MINI_COUNT)} />;
             })}
             <td title="ピットストップ回数">{n(l?.numPitStops ?? car.result?.numPitStops)}</td>
             <td title="4輪で最大のタイヤ摩耗率">{used == null ? '—' : `${n(used)}%`}</td>
@@ -83,15 +100,16 @@ export function RaceLeaderboard({ snap, selected, select }: {
       </tbody></table>
     </div>
     {!snap.cars.length && <p className="empty">UDP 2026 の順位データを待っています。</p>}
-    <div className="leader-footer"><span>{snap.cars.length} / 24 CARS</span><span>バーは当周の通過位置 · S3は前周 · ERSはMJ</span><a href="#timing">周回記録 ↗</a></div>
+    <div className="leader-footer"><span>{snap.cars.length} / 24 CARS</span><TimingLegend />
+      <span>バーは当周 · S3は前周 · ERSはMJ</span><a href="#timing">周回記録 ↗</a></div>
   </section>;
 }
 
 type TimingLap = {
   epoch: number; car: number; lap: number; start: number | null; end: number | null; ms: number | null;
   valid: boolean | null;
-  sectors: { ms: number | null; source: 'game' | 'difference' | null; valid: boolean | null }[];
-  minis: { number: number; sector: number; fromM: number; toM: number; ms: number | null }[];
+  sectors: { ms: number | null; source: 'game' | 'difference' | null; valid: boolean | null; rank?: TimingRank | null }[];
+  minis: { number: number; sector: number; fromM: number; toM: number; ms: number | null; rank?: TimingRank | null }[];
 };
 type TimingReport = { run: string; miniSectorsPerSector: number; laps: TimingLap[] };
 const lapKey = (lap: TimingLap) => lap.epoch + ':' + lap.lap;
@@ -127,6 +145,7 @@ export function LapRecords({ snap, selected }: { snap: Snapshot; selected: numbe
         {run && <a className="button" download href={`/api/timing/export?run=${run}`}>全車両の記録 JSON</a>}
       </div>
       <p className="muted timing-note">S1〜S3はゲームのタイムを優先。各セクターを距離で10分割し、通過時刻の差から計算します。</p>
+      <TimingLegend />
       {error ? <p className="empty" role="alert">{error}</p>
         : run && !report ? <p className="empty" role="status">保存済みUDPを読み込み中…</p>
         : !laps.length && <p className="empty">選択した車両の周回記録はありません。</p>}
@@ -137,7 +156,9 @@ export function LapRecords({ snap, selected }: { snap: Snapshot; selected: numbe
         {['LAP', 'TIME', 'S1', 'S2', 'S3', 'MINIS', 'VALID', 'EPOCH'].map(x => <th scope="col" key={x}>{x}</th>)}
       </tr></thead><tbody>{laps.map(row => <tr key={lapKey(row)} className={lap === row ? 'selected' : undefined}>
         <td><button aria-pressed={lap === row} onClick={() => setLapId(lapKey(row))}>L{row.lap}</button></td>
-        <td>{isCurrent(row) && row.ms == null ? <span className="accent">{lapTime(current?.currentLapTimeInMS)} · 走行中</span> : lapTime(row.ms)}</td>{row.sectors.map((s, i) => <td key={i} title={s.source === 'difference' ? 'ラップタイムからS1・S2を差し引いた値' : undefined}>
+        <td>{isCurrent(row) && row.ms == null ? <span className="accent">{lapTime(current?.currentLapTimeInMS)} · 走行中</span> : lapTime(row.ms)}</td>{row.sectors.map((s, i) => <td key={i}
+          className={s.rank ? `rank-${s.rank}` : undefined} title={[s.rank ? RANK_LABEL[s.rank] : '',
+            s.source === 'difference' ? 'ラップタイムからS1・S2を差し引いた値' : ''].filter(Boolean).join(' · ') || undefined}>
           {seconds(s.ms)}{s.source === 'difference' ? '*' : ''}{s.valid === false && s.ms != null ? ' · 無効' : ''}</td>)}
         <td>{row.minis.length ? `${row.minis.filter(m => m.ms != null).length}/${row.minis.length}` : 'N/A'}</td>
         <td>{row.valid === true ? '有効' : row.valid === false ? '無効' : '未確認'}</td><td>{row.epoch}</td>
@@ -151,7 +172,9 @@ export function LapRecords({ snap, selected }: { snap: Snapshot; selected: numbe
           <h3>SECTOR {sector}</h3>
           {lap.minis.filter(m => m.sector === sector).map(m => <div className="mini-record-row" key={m.number}>
             <span>M{String(m.number).padStart(2, '0')}</span><span>{n(m.fromM)}–{n(m.toM)} m</span>
-            <strong>{m.ms == null ? '欠測' : seconds(m.ms) + ' s'}</strong>
+            <strong className={m.rank ? `rank-${m.rank}` : undefined} title={m.rank ? RANK_LABEL[m.rank] : undefined}>
+              {m.ms == null ? '欠測' : seconds(m.ms) + ' s'}
+            </strong>
           </div>)}
         </div>)}</div>}
     </section>}
