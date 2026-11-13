@@ -2,7 +2,7 @@
 
 PS5版 EA SPORTS F1 25「2026 Season Pack」の UDP を Windows PC で受信し、ブラウザから分析・記録・再生するローカルアプリです。最大24台のタイミング、テレメトリー、条件付きの戦略比較、日本語のチーム無線を1つの画面から操作できます。
 
-セットアップ前に、24台の合成レースを [GitHub Pagesの公開デモ](https://anemia111.github.io/f1-2026-pitwall-telemetry-pages/) で再生できます。PIT WALLで順位と選択車の走行軌跡を確認し、REPLAYで再生位置を変えられます。公開ページの **PS5 LIVE** から、受信PCで起動したWindows版を開けます。
+[PS5 ライブ接続ページ](https://anemia111.github.io/f1-2026-pitwall-telemetry-pages/) から、受信PCで起動したWindows版を開けます。
 
 ## Windows で起動
 
@@ -17,7 +17,7 @@ PS5版 EA SPORTS F1 25「2026 Season Pack」の UDP を Windows PC で受信し�
 
 **PIT WALL** の順位表では前車との差と首位との差を切り替えられます。S1〜S3の下のバーは当周の通過位置です。**LAP RECORDS** では、保存したUDPから各車の周回、ゲームのセクタータイム、各セクターを距離で10分割したミニセクターを表示し、全車分をJSONで保存できます。距離境界を挟むサンプルが不足する場合は欠測になります。
 
-受信・記録中のセッションを選ぶと、走行中のラップタイマーと周回記録が自動更新されます。公開デモでも、再生位置に合わせて順位表と周回記録を確認できます。
+受信・記録中のセッションを選ぶと、走行中のラップタイマーと周回記録が自動更新されます。
 
 PowerShell から起動する場合
 
@@ -75,6 +75,6 @@ PowerShell から起動する場合
 .\.venv\Scripts\python.exe -m scripts.package ..\APEX-2026-Pit-Wall-Windows.zip
 ```
 
-公開デモを再生成するには `python -m scripts.build_pages <出力先>` を実行します。生成処理の入力は合成UDPです。出力先に作られた静的ファイルを公開用リポジトリへ反映できます。
+公開用のPS5ライブ接続ページを生成するには `python -m scripts.build_pages <出力先>` を実行します。出力先に作られた静的ファイルを公開用リポジトリへ反映できます。
 
 UDP・アーカイブ構造は [プロトコル](docs/udp.md)、アプリ構造は [アーキテクチャ](docs/architecture.md)、検証状況と残作業は [進捗](PROGRESS.md) を参照してください。元の実装は MIT ライセンスです。F1 と EA の名称は互換性を示すために使っています。

@@ -1,23 +1,15 @@
-[hidden] { display: none !important; }
-#workspace-title { font-size: clamp(1.55rem, 3vw, 2.28rem); }
-#seek { min-width: 95px; }
-#strategy-panel .padded p + p { margin-top: 6px; }
-#cars .driver { min-height: 28px; justify-content: center; }
-#pit-wall-grid { grid-template-columns: minmax(0, 2.6fr) minmax(255px, 1fr); }
-.timing th, .timing td { padding-inline: 6px; }
-.timing th:nth-child(2), .timing td:nth-child(2) { min-width: 118px; }
-#focus-panel .map svg { max-height: min(65vh, 680px); }
-#focus-panel #strategy-panel { max-width: 850px; }
-#selected-car:empty { display: none; }
-.live-action { margin-block: 12px; }
-#live-panel { max-width: 850px; }
-@media (max-width: 1100px) {
-  #pit-wall-grid { grid-template-columns: minmax(0, 1fr); }
-  .wall aside { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+main {
+  width: min(100%, 920px);
 }
-@media (max-width: 740px) {
-  .wall aside { grid-template-columns: minmax(0, 1fr); }
-  .timing .table-scroll { max-height: 45vh; }
-  .timing thead { position: sticky; top: 0; z-index: 1; }
-  #seek { flex-basis: 110px; }
+
+.padded {
+  padding: clamp(14px, 3vw, 24px);
+}
+
+.live-action {
+  margin-block: 16px;
+}
+
+li + li {
+  margin-top: 8px;
 }
